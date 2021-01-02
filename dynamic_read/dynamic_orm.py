@@ -2,7 +2,7 @@ from functools import lru_cache
 
 from rest_framework.serializers import ListSerializer
 
-from serializers import DynamicReadSerializerMixin
+from .serializers import DynamicReadSerializerMixin
 
 
 @lru_cache(maxsize=2048)
@@ -53,8 +53,8 @@ def get_all_select_prefetch(serializer_class):
 
 
 def populate_dynamic_orm_cache():
-    from views import DynamicReadViewMixin
-    for viewset in DynamicReadViewMixin.get_concrete_classes():
+    from .views import DynamicReadORMViewMixin
+    for viewset in DynamicReadORMViewMixin.get_concrete_classes():
         if (
             hasattr(viewset, "serializer_class")
             and viewset.serializer_class
