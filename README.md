@@ -12,11 +12,11 @@ Official version support:
 What it does
 -----
 
-- Gives the ability to dynamically pick required fields to be serialized for a serializer which was actually defined to serializer fixed set of fields
+- Gives the ability to dynamically pick required fields to be serialized for a model serializer
     - This rules out the requirement of defining multiple serializers, views for a single model, thereby eliminating lots of boilerplate code
     - We can specify required fields to be serialized for a GET request via query params
     - Using a single ModelViewSet and ModelSerializer for a model, we can serve GET requests for different kinds of scenario
-    - This also reduces response size comparatively since we pick only required fields 
+    - This also reduces response size comparatively since we pick only required fields in required scenarios
 - Improves querying and reduces overall I/O load by a very good factor
     - reduces overall number of queries required to serve a generic GET Request by a `rest_framework.viewsets.ModelViewSet`
 
@@ -28,17 +28,15 @@ This package provides following mixins:
     - following arguments can be passed to a model serializer inheriting this mixin:
         - `dynamic_filter_fields` : list of serializer field names which should be allowed for serialization 
         - `dynamic_omit_fields` : list of serializer field names which should not be allowed for serialization
-- `DynamicReadBaseViewMixin` provides support on top of `rest_framework.viewsets.ModelViewSet` to pick required fields to be serialized via a GET request query params and passes them to `DynamicReadSerializerMixin`
+- `DynamicReadBaseViewMixin` provides support on top of `rest_framework.viewsets.ModelViewSet` to pick required fields to be serialized via query params of a GET request, these required fields then are internally forwarded to `DynamicReadSerializerMixin`
     - following query params can be passed in a GET request which is served by a model viewset inheriting this mixin:
-        - `fields` : serializer field names provided as comma seperated values, which should be considered for serialization
-        - `omit` : serializer field names provided as comma seperated values, which should not be considered for serialization
+        - `fields` : serializer field names provided as comma seperated values, which should be considered for serialization (will be forwarded to `dynamic_filter_fields`)
+        - `omit` : serializer field names provided as comma seperated values, which should not be considered for serialization (will be forwarded to `dynamic_omit_fields`)
 - `DynamicReadORMViewMixin` provides support on top of `DynamicReadBaseViewMixin` to optimize queryset by dynamically calculating select_related and prefetch_related fields per request based on `fields` and `omit` query params which are explained above
 
 
 Installing
 ----------
-
-::
 
     yet to be registered on pypi, copy source files until then, :D
 
