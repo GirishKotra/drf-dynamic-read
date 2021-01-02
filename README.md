@@ -12,11 +12,11 @@ Official version support:
 What it does
 -----
 
-- Gives the ability to dynamically pick required fields to be serialized for a model serializer
-    - This rules out the requirement of defining multiple serializers, views for a single model, thereby eliminating lots of boilerplate code
+- Gives the ability to dynamically select required fields to be serialized for a model serializer
+    - This rules out the requirement of defining multiple serializers and views for a single model, thereby eliminating lots of boilerplate code
     - We can specify required fields to be serialized for a GET request via query params
     - Using a single ModelViewSet and ModelSerializer for a model, we can serve GET requests for different kinds of scenario
-    - This also reduces response size comparatively since we pick only required fields in required scenarios
+    - This also reduces response size comparatively as we pick only required fields in different scenarios
 - Improves querying and reduces overall I/O load by a very good factor
     - reduces overall number of queries required to serve a generic GET Request by a `rest_framework.viewsets.ModelViewSet`
 
@@ -32,7 +32,7 @@ This package provides following mixins:
     - following query params can be passed in a GET request which is served by a model viewset inheriting this mixin:
         - `fields` : serializer field names provided as comma seperated values, which should be considered for serialization (will be forwarded to `dynamic_filter_fields`)
         - `omit` : serializer field names provided as comma seperated values, which should not be considered for serialization (will be forwarded to `dynamic_omit_fields`)
-- `DynamicReadORMViewMixin` provides support on top of `DynamicReadBaseViewMixin` to optimize queryset by dynamically calculating select_related and prefetch_related fields per request based on `fields` and `omit` query params which are explained above
+- `DynamicReadORMViewMixin` provides support on top of `DynamicReadBaseViewMixin` to optimize queryset by dynamically calculating necessary select_related and prefetch_related operations per request based on `fields` and `omit` query params which are explained above
 
 
 Installing
@@ -62,6 +62,8 @@ Usage
 ------------
 Example Entity Relationship:
 
+    from django.db import models
+
     class User(models.Model)
         username = models.CharField()
 
@@ -83,6 +85,10 @@ Example Entity Relationship:
 
 
 Example serializers for above ER:
+
+    from rest_framework import serializers
+    from dynamic_read.serializers import DynamicReadSerializerMixin
+
 
     class UserSerializer(DynamicReadSerializerMixin, serializers.ModelSerializer):
         class Meta:
@@ -129,24 +135,24 @@ Example serializers for above ER:
 
 Example views for above ER:
 
+    from dynamic_read.views import DynamicReadBaseViewMixin
+    from rest_framework import viewsets
+    from rest_framework.routers import DefaultRouter
+
     class EventModelViewSet(viewsets.ModelViewSet, DynamicReadBaseViewMixin):
         queryset = Event.objects.all()
         serializer_class = EventSerializer
 
 
-    class EventOptimizedModelViewSet(viewsets.ModelViewSet, DynamicReadORMViewMixin)
-        queryset = Event.objects.all()
-        serializer_class = EventSerializer
-
-    router.register("/api/1/event_basic/")
-    router.register("/api/1/event_enhanced/")
+    router = DefaultRouter()
+    router.register("/api/event_basic/")
 
 
 A regular request returns all fields:
 
-``GET /api/1/event_basic/``
+``GET /api/event_basic/``
 
-.. sourcecode:: json
+Response::
 
     [
       {
@@ -190,9 +196,9 @@ A regular request returns all fields:
 A `GET` request with the `fields` parameter returns only a subset of
 the fields:
 
-``GET /api/1/event_basic/?fields=id,type``
+``GET /api/event_basic/?fields=id,type``
 
-.. sourcecode:: json
+Response:
 
     [
       {
@@ -221,9 +227,9 @@ the fields:
 
 `fields` parameter can spawn through the relationships also:
 
-``GET /api/1/event_basic/?fields=id,type__name,cause__name,owner__username``
+``GET /api/event_basic/?fields=id,type__name,cause__name,owner__username``
 
-.. sourcecode:: json
+Response:
 
     [
       {
@@ -249,9 +255,9 @@ the fields:
 
 A `GET` request with the `omit` parameter excludes specified fields(can also spawn through relationships just like the above example for `fields`).
 
-``GET /api/1/event_basic/?omit=type,cause__created_by,owner__id``
+``GET /api/event_basic/?omit=type,cause__created_by,owner__id``
 
-.. sourcecode:: json
+Response:
 
     [
       {
@@ -276,9 +282,9 @@ A `GET` request with the `omit` parameter excludes specified fields(can also spa
 
 You can use both `fields` and `omit` in the same request!
 
-``GET /identities/?fields=id,type&omit=type__created_by``
+``GET /api/event_basic/?fields=id,type&omit=type__created_by``
 
-.. sourcecode:: json
+Response:
 
     [
       {
@@ -305,7 +311,7 @@ Query Optimization
 ----------
 
 Now first let's consider this general request which returns all the fields:
-``GET /api/1/event_basic/``
+``GET /api/event_basic/``
 
 Total number of queries would be: 51
 -   1 (Base query to return all the event objects)
@@ -316,7 +322,26 @@ Total number of queries would be: 51
 -   10 x 1 (fetch owner for an event)
 
 
-Now let's try the optimized version: ``GET /api/1/event_enhanced/``
+Now let's define a new view in views.py:
+
+    from dynamic_read.views import DynamicReadBaseViewMixin, DynamicReadORMViewMixin
+    from rest_framework import viewsets
+    from rest_framework.routers import DefaultRouter
+
+    class EventModelViewSet(viewsets.ModelViewSet, DynamicReadBaseViewMixin):
+        queryset = Event.objects.all()
+        serializer_class = EventSerializer
+
+
+    class EventOptimizedModelViewSet(viewsets.ModelViewSet, DynamicReadORMViewMixin)
+        queryset = Event.objects.all()
+        serializer_class = EventSerializer
+
+    router = DefaultRouter()
+    router.register("/api/event_basic/")
+    router.register("/api/event_enhanced/")
+
+Now let's try the optimized version: ``GET /api/event_enhanced/``
 
 Total number of queries would be: 3
 -   `.select_related("type", "owner__created_by")`
@@ -327,7 +352,7 @@ Total number of queries would be: 3
 
 
 Now first let's consider the above example with `fields`:
-``GET /api/1/event_enhanced/?fields=type__name,owner__created_by``
+``GET /api/event_enhanced/?fields=type__name,owner__created_by``
 
 Total number of queries would be: 1
 -   `.select_related("type", "owner__created_by")`
