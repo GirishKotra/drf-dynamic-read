@@ -49,18 +49,18 @@ def get_final_fields(serializer, parent_accessor=""):
 
 @lru_cache(maxsize=2048)
 def get_all_select_prefetch(serializer_class):
-    return get_final_fields(serializer_class())
+    return get_final_fields(serializer_class(disable_dynamic_read=True))
 
 
 def populate_dynamic_orm_cache():
     from .views import DynamicReadORMViewMixin
-    for viewset in DynamicReadORMViewMixin.get_concrete_classes():
+    for view in DynamicReadORMViewMixin.get_concrete_classes():
         if (
-            hasattr(viewset, "serializer_class")
-            and viewset.serializer_class
-            and issubclass(viewset.serializer_class, DynamicReadSerializerMixin)
+            hasattr(view, "serializer_class")
+            and view.serializer_class
+            and issubclass(view.serializer_class, DynamicReadSerializerMixin)
         ):
-            get_all_select_prefetch(viewset.serializer_class)
+            get_all_select_prefetch(view.serializer_class)
 
 
 @lru_cache(maxsize=2048)
