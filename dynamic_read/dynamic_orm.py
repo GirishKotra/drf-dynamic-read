@@ -49,10 +49,14 @@ def get_final_fields(serializer, parent_accessor=""):
 
 @lru_cache(maxsize=2048)
 def get_all_select_prefetch(serializer_class):
+    if not issubclass(serializer_class, DynamicReadSerializerMixin):
+        raise TypeError(f"Serializer {serializer_class} must inherit DynamicReadSerializerMixin")
+
     return get_final_fields(serializer_class(disable_dynamic_read=True))
 
 
 def populate_dynamic_orm_cache():
+    """This method must be run after models are loaded."""
     from .views import DynamicReadORMViewMixin
     for view in DynamicReadORMViewMixin.get_concrete_classes():
         if (
