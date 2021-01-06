@@ -7,6 +7,10 @@ class DynamicReadSerializerMixin(object):
     which fields should be displayed.
     """
 
+    @classmethod
+    def get_concrete_classes(cls):
+        return list(cls._subclasses)
+
     def __init__(
         self,
         *args,

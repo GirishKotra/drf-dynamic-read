@@ -56,15 +56,10 @@ def get_all_select_prefetch(serializer_class):
 
 
 def populate_dynamic_orm_cache():
-    """This method must be run after models are loaded."""
-    from .views import DynamicReadORMViewMixin
-    for view in DynamicReadORMViewMixin.get_concrete_classes():
-        if (
-            hasattr(view, "serializer_class")
-            and view.serializer_class
-            and issubclass(view.serializer_class, DynamicReadSerializerMixin)
-        ):
-            get_all_select_prefetch(view.serializer_class)
+    """This method must be run after models are loaded. It caches the serializer fields into an lru cache
+    for faster access during runtime."""
+    for serializer_class in DynamicReadSerializerMixin.get_concrete_classes():
+        get_all_select_prefetch(serializer_class)
 
 
 @lru_cache(maxsize=2048)
