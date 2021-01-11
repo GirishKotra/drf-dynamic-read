@@ -1,4 +1,14 @@
-from rest_framework import serializers
+from rest_framework.serializers import ListSerializer
+
+
+class ChildNotSupported(Exception):
+    """Represents a child object cannot be used with dynamic drf"""
+
+    def __init__(self, child):
+        self.child = child
+
+    def __str__(self):
+        return f"ChildNotSupported: {self.child}"
 
 
 class DynamicReadSerializerMixin(object):
@@ -92,6 +102,21 @@ class DynamicReadSerializerMixin(object):
 
         return fields
 
+    def extract_serializer_from_child(self, child):
+        """Child object can be a ListSerializer, PresentablePrimaryKeyRelatedField, etc. Use this to define serializer
+        object extraction from child object. This method must return a DynamicReadSerializerMixin object. Or exit raising
+        ChildNotSupported exception."""
+        if isinstance(child, DynamicReadSerializerMixin):
+            return child
+
+        if isinstance(child, ListSerializer) and isinstance(
+            child.child, DynamicReadSerializerMixin
+        ):
+            return child.child
+
+        # Apply any additional child extraction logic here
+        raise ChildNotSupported(child)
+
     def process_fields_for_dynamic_read(self):
         # current_depth
         current_depth = getattr(self, "depth", 0)
@@ -104,15 +129,9 @@ class DynamicReadSerializerMixin(object):
             # process nested_relationships only if there are any filter_fields/omit_fields set
             # --> many_to_many/one_to_many(reverse_lookup): observed as list_serializer(ModelSerializer with many=True)
             # --> many_to_one/one_to_one relationship: observed as ModelSerializer
-            if isinstance(child_field, DynamicReadSerializerMixin) or (
-                isinstance(child_field, serializers.ListSerializer)
-                and isinstance(child_field.child, DynamicReadSerializerMixin)
-            ):
-                field = (
-                    child_field
-                    if isinstance(child_field, DynamicReadSerializerMixin)
-                    else child_field.child
-                )
+            try:
+                field = self.extract_serializer_from_child(child_field)
+
                 # set the child depth
                 setattr(field, "depth", current_depth + 1)
 
@@ -123,13 +142,18 @@ class DynamicReadSerializerMixin(object):
                             current_depth
                         ] and current_depth + 1 < len(filter_field):
                             field.dynamic_filter_fields.append(filter_field)
+
                 if self.dynamic_omit_fields:
                     for omit_field in self.dynamic_omit_fields:
                         if child_field_name == omit_field[current_depth]:
                             field.dynamic_omit_fields.append(omit_field)
+            except ChildNotSupported:
+                # Skip if child not supported
+                pass
 
     def to_representation(self, instance):
         # inherit self.disable_dynamic_read from immediate parent
+        # parent is populated after bind, cannot reproduce this in __init__
         self.disable_dynamic_read = self.disable_dynamic_read or getattr(
             self.parent, "disable_dynamic_read", False,
         )
