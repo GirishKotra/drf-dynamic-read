@@ -5,16 +5,6 @@ from .dynamic_orm import get_prefetch_select
 
 
 class DynamicReadBaseViewMixin(object):
-    _subclasses = []
-
-    @classmethod
-    def get_concrete_classes(cls):
-        return list(cls._subclasses)
-
-    def __init_subclass__(cls):
-        if cls.queryset and cls.serializer_class:
-            DynamicReadBaseViewMixin._subclasses.append(cls)
-
     @cached_property
     def fields(self):
         return self.request.query_params.get("fields", "").split(",")

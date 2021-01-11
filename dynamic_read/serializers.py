@@ -6,6 +6,14 @@ class DynamicReadSerializerMixin(object):
     A serializer mixin that takes an additional `fields` argument that controls
     which fields should be displayed.
     """
+    _subclasses = []
+
+    @staticmethod
+    def get_concrete_classes():
+        return list(DynamicReadSerializerMixin._subclasses)
+
+    def __init_subclass__(cls):
+        DynamicReadSerializerMixin._subclasses.append(cls)
 
     def __init__(
         self,
