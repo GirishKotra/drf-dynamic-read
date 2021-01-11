@@ -129,19 +129,16 @@ class DynamicReadSerializerMixin(object):
 
                 # check for matches w.r.t current_depth
                 if self.dynamic_filter_fields:
-                    field.dynamic_filter_fields += [
-                        filter_field
-                        for filter_field in self.dynamic_filter_fields
-                        if child_field_name == filter_field[current_depth]
-                        and current_depth + 1 < len(filter_field)
-                    ]
+                    for filter_field in self.dynamic_filter_fields:
+                        if child_field_name == filter_field[
+                            current_depth
+                        ] and current_depth + 1 < len(filter_field):
+                            field.dynamic_filter_fields.append(filter_field)
 
                 if self.dynamic_omit_fields:
-                    field.dynamic_omit_fields += [
-                        omit_field
-                        for omit_field in self.dynamic_omit_fields
-                        if child_field_name == omit_field[current_depth]
-                    ]
+                    for omit_field in self.dynamic_omit_fields:
+                        if child_field_name == omit_field[current_depth]:
+                            field.dynamic_omit_fields.append(omit_field)
             except ChildNotSupported:
                 # Skip if child not supported
                 pass
