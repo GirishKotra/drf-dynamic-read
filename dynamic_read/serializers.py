@@ -1,4 +1,10 @@
+from contextlib import suppress
+from itertools import groupby
+
 from rest_framework.serializers import ListSerializer
+from collections import OrderedDict
+from functools import lru_cache
+from operator import itemgetter, attrgetter
 
 
 class ChildNotSupported(Exception):
@@ -11,11 +17,18 @@ class ChildNotSupported(Exception):
         return f"ChildNotSupported: {self.child}"
 
 
+@lru_cache(maxsize=1024)
+def split_fields(fields: tuple):
+    return tuple((each.split("__") for each in fields))
+
+
 class DynamicReadSerializerMixin(object):
     """
     A serializer mixin that takes an additional `fields` argument that controls
     which fields should be displayed.
     """
+
+    __slots__ = ("dynamic_filter_fields", "dynamic_omit_fields", "disable_dynamic_read")
     _subclasses = []
 
     @staticmethod
@@ -45,18 +58,13 @@ class DynamicReadSerializerMixin(object):
         """
 
         self.dynamic_filter_fields = (
-            [each.split("__") for each in dynamic_filter_fields]
-            if dynamic_filter_fields
-            else []
+            split_fields(dynamic_filter_fields) if dynamic_filter_fields else []
         )
-
         self.dynamic_omit_fields = (
-            [each.split("__") for each in dynamic_omit_fields]
-            if dynamic_omit_fields
-            else []
+            split_fields(dynamic_omit_fields) if dynamic_omit_fields else []
         )
-
         self.disable_dynamic_read = disable_dynamic_read
+
         super(DynamicReadSerializerMixin, self).__init__(*args, **kwargs)
 
     @property
@@ -73,16 +81,10 @@ class DynamicReadSerializerMixin(object):
             # We are being called before a request cycle or dynamic read was disabled
             return fields
 
-        # Drop any fields that are not specified in the `fields` argument.
-        existing = set(fields.keys())
-
-        # current_depth
-        current_depth = getattr(self, "depth", 0)
+        existing, current_depth = set(fields.keys()), getattr(self, "depth", 0)
 
         # apply field filtering only if fields query param is provided
-        filter_fields = [
-            filter_field[current_depth] for filter_field in self.dynamic_filter_fields
-        ]
+        filter_fields = map(itemgetter(current_depth), self.dynamic_filter_fields)
 
         # apply omit filtering only if omit query param is provided
         omit_fields = [
@@ -91,15 +93,14 @@ class DynamicReadSerializerMixin(object):
             if len(omit_field) == current_depth + 1
         ]
 
-        allowed = set([_f for _f in filter_fields if _f]) or existing
+        allowed, excluded = set(filter(None, filter_fields)) or existing
+        excluded = set(filter(None, omit_fields))
 
-        excluded = set([_f for _f in omit_fields if _f])
+        # Final list of fields that are in allowed and not in excluded
+        final_list = (existing & allowed) - excluded
 
-        # filtering fields keeping existing fields as source in order to avoid invalid query param values
-        for field in existing:
-            if field not in allowed or (field in excluded):
-                fields.pop(field, None)
-
+        # Generate new fields dict
+        fields = dict(zip(final_list, itemgetter(*final_list)(fields)))
         return fields
 
     def extract_serializer_from_child(self, child):
@@ -118,44 +119,36 @@ class DynamicReadSerializerMixin(object):
         raise ChildNotSupported(child)
 
     def process_fields_for_dynamic_read(self):
-        # current_depth
-        current_depth = getattr(self, "depth", 0)
-
         if not (self.dynamic_filter_fields or self.dynamic_omit_fields):
             self.disable_dynamic_read = True
             return
 
-        for child_field_name, child_field in self.fields.items():
-            # process nested_relationships only if there are any filter_fields/omit_fields set
-            # --> many_to_many/one_to_many(reverse_lookup): observed as list_serializer(ModelSerializer with many=True)
-            # --> many_to_one/one_to_one relationship: observed as ModelSerializer
-            try:
-                field = self.extract_serializer_from_child(child_field)
+        # current_depth
+        current_depth = getattr(self, "depth", 0)
+        next_depth, fields = current_depth + 1, self.fields
 
-                # set the child depth
-                setattr(field, "depth", current_depth + 1)
+        def extend_child(list_getter):
+            next_fields_to_update = groupby(
+                list_getter(self), key=itemgetter(current_depth)
+            )
+            for field, next_filter_fields in next_fields_to_update:
+                with suppress(ChildNotSupported, KeyError):
+                    field = self.extract_serializer_from_child(fields[field])
 
-                # check for matches w.r.t current_depth
-                if self.dynamic_filter_fields:
-                    for filter_field in self.dynamic_filter_fields:
-                        if child_field_name == filter_field[
-                            current_depth
-                        ] and current_depth + 1 < len(filter_field):
-                            field.dynamic_filter_fields.append(filter_field)
+                    # set the child depth
+                    setattr(field, "depth", next_depth)
+                    list_getter(field).extend(next_filter_fields)
 
-                if self.dynamic_omit_fields:
-                    for omit_field in self.dynamic_omit_fields:
-                        if child_field_name == omit_field[current_depth]:
-                            field.dynamic_omit_fields.append(omit_field)
-            except ChildNotSupported:
-                # Skip if child not supported
-                pass
+        extend_child(attrgetter("dynamic_filter_fields"))
+        extend_child(attrgetter("dynamic_omit_fields"))
 
     def to_representation(self, instance):
         # inherit self.disable_dynamic_read from immediate parent
         # parent is populated after bind, cannot reproduce this in __init__
         self.disable_dynamic_read = self.disable_dynamic_read or getattr(
-            self.parent, "disable_dynamic_read", False,
+            self.parent,
+            "disable_dynamic_read",
+            False,
         )
 
         # check if dynamic read is disabled
