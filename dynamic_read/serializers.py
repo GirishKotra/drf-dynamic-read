@@ -19,7 +19,7 @@ class ChildNotSupported(Exception):
 
 @lru_cache(maxsize=1024)
 def split_fields(fields: tuple):
-    return tuple((each.split("__") for each in fields))
+    return list((each.split("__") for each in fields))
 
 
 class DynamicReadSerializerMixin(object):
