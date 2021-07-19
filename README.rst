@@ -1,38 +1,53 @@
 drf-dynamic-read
 ===================================================
-A utility to improve and optimise read operations for Django Rest Framework based applications
+A utility to improve and optimise read operations(querying and serialization of data) for Django Rest Framework based applications
 
 
 Official version support:
 
-- Django 1.11, 2.0, 2.1
-- Supported REST Framework versions: 3.8, 3.9
-- Python 3.4+
+- Django >=1.11
+- Supported REST Framework versions >= 3.6.4
+- Python >= 3.6
 
-What it does
------
+Capabilities
+------------
 
-- Gives the ability to dynamically select required fields to be serialized for a model serializer
-    - This rules out the requirement of defining multiple serializers and views for a single model, thereby eliminating lots of boilerplate code
+- Gives the ability to dynamically select required fields to be serialized
+
     - We can specify required fields to be serialized for a GET request via query params
-    - Using a single ModelViewSet and ModelSerializer for a model, we can serve GET requests for different kinds of scenario
-    - This also reduces response size comparatively as we pick only required fields in different scenarios
+    - This also reduces response size comparatively as we pick only necessary fields
+    - Ability to pick required fields through all kinds of nested relationships(many2one, many2many, reverse_lookups)
+
 - Improves querying and reduces overall I/O load by a very good factor
+
     - reduces overall number of queries required to serve a generic GET Request by a `rest_framework.viewsets.ModelViewSet`
+
+- Plug and Play
+
+    - Simple API with minimal configurations
 
 
 What it provides
------
+----------------
 This package provides following mixins:
-- `DynamicReadSerializerMixin` provides an API on top of `ModelSerializer` to provide required fields to be serialized(via args)
-    - following arguments can be passed to a model serializer inheriting this mixin:
-        - `dynamic_filter_fields` : list of serializer field names which should be allowed for serialization 
-        - `dynamic_omit_fields` : list of serializer field names which should not be allowed for serialization
-- `DynamicReadBaseViewMixin` provides support on top of `rest_framework.viewsets.ModelViewSet` to pick required fields to be serialized via query params of a GET request, these required fields then are internally forwarded to `DynamicReadSerializerMixin`
-    - following query params can be passed in a GET request which is served by a model viewset inheriting this mixin:
-        - `fields` : serializer field names provided as comma seperated values, which should be considered for serialization (will be forwarded to `dynamic_filter_fields`)
-        - `omit` : serializer field names provided as comma seperated values, which should not be considered for serialization (will be forwarded to `dynamic_omit_fields`)
-- `DynamicReadORMViewMixin` provides support on top of `DynamicReadBaseViewMixin` to optimize queryset by dynamically calculating necessary select_related and prefetch_related operations per request based on `fields` and `omit` query params which are explained above
+
+- ``DynamicReadSerializerMixin``
+
+    - provides an API on top of ``ModelSerializer`` to provide required fields to be serialized(via kwargs)
+    - following kwargs can be passed to a model serializer inheriting this mixin
+
+            - ``filter_fields`` : list of serializer field names which should be allowed for serialization
+            - ``omit_fields`` : list of serializer field names which should not be allowed for serialization
+            - ``optimize_queryset`` : enable/disable queryset optimizations by performing necessary select_related and prefetch_related(based on ``fields`` and ``omit`` query params per request) on the input queryset
+
+- ``DynamicReadViewMixin``
+
+    - provides support on top of `rest_framework.viewsets.ModelViewSet` to pick required fields to be serialized via query params of a GET request, these required fields are internally forwarded to ``DynamicReadSerializerMixin``
+    - ``optimize_queryset`` : static boolean attribute whose value is forwarded to DynamicReadSerializerMixin kwargs
+    - following query params can be passed for any GET request which is served by a model viewset inheriting this mixin:
+
+        - ``fields`` : serializer field names as comma seperated values which should be considered for serialization
+        - ``omit`` : serializer field names as comma seperated values which should not be considered for serialization
 
 
 Installing
@@ -40,27 +55,12 @@ Installing
 
     yet to be registered on pypi, copy source files until then, :D
 
-Important note:
--   Please invoke populate_dynamic_orm_cache from dynamic_orm after router is populated(in urls.py)
-
-Example urls.py:
-
-    from rest_framework.routers import DefaultRouter
-    from dynamic_read.dynamic_orm import populate_dynamic_orm_cache
-
-    router = DefaultRouter()
-    router.register(..)
-    router.register(..)
-    router.register(..)
-
-    populate_dynamic_orm_cache()
-
-
-
 
 Usage
 ------------
 Example Entity Relationship:
+
+.. sourcecode:: python
 
     from django.db import models
 
@@ -85,6 +85,8 @@ Example Entity Relationship:
 
 
 Example serializers for above ER:
+
+.. sourcecode:: python
 
     from rest_framework import serializers
     from dynamic_read.serializers import DynamicReadSerializerMixin
@@ -130,10 +132,12 @@ Example serializers for above ER:
         created_by = UserSerializer(read_only=True)
 
         class Meta:
-            model = EventCause
+            model = Event
             fields = "__all__"
 
 Example views for above ER:
+
+.. sourcecode:: python
 
     from dynamic_read.views import DynamicReadBaseViewMixin
     from rest_framework import viewsets
@@ -152,7 +156,9 @@ A regular request returns all fields:
 
 ``GET /api/event_basic/``
 
-Response::
+Response:
+
+.. sourcecode:: json
 
     [
       {
@@ -183,14 +189,12 @@ Response::
             }
           }
         ],
-        "owner": {
+        "created_by": {
           "id": 2,
           "username": "user2"
         }
       },
-      ...
     ]
-
 
 
 A `GET` request with the `fields` parameter returns only a subset of
@@ -199,6 +203,8 @@ the fields:
 ``GET /api/event_basic/?fields=id,type``
 
 Response:
+
+.. sourcecode:: json
 
     [
       {
@@ -227,9 +233,11 @@ Response:
 
 `fields` parameter can spawn through the relationships also:
 
-``GET /api/event_basic/?fields=id,type__name,cause__name,owner__username``
+``GET /api/event_basic/?fields=id,type__name,cause__name,created_by__username``
 
 Response:
+
+.. sourcecode:: json
 
     [
       {
@@ -245,19 +253,20 @@ Response:
             "name": "Cause2"
           }
         ],
-        "owner": {
+        "created_by": {
           "username": "user2"
         }
       },
-      ...
     ]
 
 
 A `GET` request with the `omit` parameter excludes specified fields(can also spawn through relationships just like the above example for `fields`).
 
-``GET /api/event_basic/?omit=type,cause__created_by,owner__id``
+``GET /api/event_basic/?omit=type,cause__created_by,created_by__id``
 
 Response:
+
+.. sourcecode:: json
 
     [
       {
@@ -272,48 +281,22 @@ Response:
             "name": "Cause2",
           }
         ],
-        "owner": {
+        "created_by": {
           "username": "user2"
         }
       },
-      ...
     ]
 
-
-You can use both `fields` and `omit` in the same request!
-
-``GET /api/event_basic/?fields=id,type&omit=type__created_by``
-
-Response:
-
-    [
-      {
-        "id": 1,
-        "type": {
-          "id": 2,
-          "name": "Type2"1
-        }
-      },
-      {
-        "id": 2,
-        "type": {
-          "id": 1,
-          "name": "Type1"
-        }
-      },
-      ...
-    ]
-
-
-All the above examples apply the same way to detail routes also
+All the above examples work in the same mechanism for detail routes
 
 Query Optimization
-----------
+------------------
 
 Now first let's consider this general request which returns all the fields:
 ``GET /api/event_basic/``
 
 Total number of queries would be: 51
+
 -   1 (Base query to return all the event objects)
 -   10 x 1 (fetch type for an event)
 -   10 x 1 (fetch created_by for an each type)
@@ -324,16 +307,19 @@ Total number of queries would be: 51
 
 Now let's define a new view in views.py:
 
-    from dynamic_read.views import DynamicReadBaseViewMixin, DynamicReadORMViewMixin
+.. sourcecode:: python
+
+    from dynamic_read.views import DynamicReadViewMixin
     from rest_framework import viewsets
     from rest_framework.routers import DefaultRouter
 
-    class EventModelViewSet(viewsets.ModelViewSet, DynamicReadBaseViewMixin):
+    class EventModelViewSet(DynamicReadViewMixin, viewsets.ModelViewSet):
         queryset = Event.objects.all()
         serializer_class = EventSerializer
 
 
-    class EventOptimizedModelViewSet(viewsets.ModelViewSet, DynamicReadORMViewMixin)
+    class EventOptimizedModelViewSet(DynamicReadViewMixin, viewsets.ModelViewSet)
+        optimize_queryset = True
         queryset = Event.objects.all()
         serializer_class = EventSerializer
 
@@ -344,35 +330,45 @@ Now let's define a new view in views.py:
 Now let's try the optimized version: ``GET /api/event_enhanced/``
 
 Total number of queries would be: 3
--   `.select_related("type", "owner__created_by")`
-    - 1 (Query which gets all events inner joined with event types(inner joined with users), users) 
--   `.prefetch_related("causes__created_by")`
+
+- ``.select_related("type", "owner__created_by")``
+
+    - 1 (Query which gets all events inner joined with event types(inner joined with users), users)
+
+- ``.prefetch_related("causes__created_by")``
+
     - 1 (Query to get all required event causes separately)
     - 1 (Query to get all users(created_by) for event causes)
 
 
-Now first let's consider the above example with `fields`:
-``GET /api/event_enhanced/?fields=type__name,owner__created_by``
+Now first let's consider the above example with ``fields``: ``GET /api/event_enhanced/?fields=type__name,owner__created_by``
 
 Total number of queries would be: 1
--   `.select_related("type", "owner__created_by")`
-    - 1 (Query which gets all events inner joined with event types(inner joined with users), users) 
+
+- ``.select_related("type", "owner__created_by")``
+
+    - 1 (Query which gets all events inner joined with event types, users)
 
 
 Testing
 -------
 
-Yet to be written :(
+Yet to write :)
+
+
+Planned features
+-------
+
+- API aliasing, single view serving extended url patterns, each url pattern is an alias mapped to specific fields,omit values
+- Restricting the scope of fields,omit w.r.t user defined permissions per API
 
 
 Credits
 -------
 
-- This implementation is inspired from `drf-dynamic-fields`
-  <https://github.com/dbrgn/drf-dynamic-fields>. Thanks to
-  ``dbrgn``
-- Thanks to Rishab Jain for implementing caching in the process of evaluating required fields to be used in `select_related, prefetch_related`
-- Thanks to Martin Garrix for his amazing music which brings in all the required dopamine
+- This implementation is inspired from `drf-dynamic-fields` by ``dbrgn``
+- Thanks to Rishab Jain for implementing caching in evaluation of ``select_related``, ``prefetch_related`` for a ``QuerySet`` w.r.t fields, omit
+- Thanks to Martin Garrix for his amazing music, sourcing all the necessary dopamine
 
 
 License

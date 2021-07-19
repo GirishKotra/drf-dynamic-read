@@ -1,52 +1,26 @@
-from functools import cached_property
-
 from .serializers import DynamicReadSerializerMixin
-from .dynamic_orm import get_prefetch_select
 
 
-class DynamicReadBaseViewMixin(object):
-    @cached_property
+class DynamicReadViewMixin(object):
+    optimize_queryset = False
+
+    @property
     def fields(self):
         return self.request.query_params.get("fields", "").split(",")
 
-    @cached_property
+    @property
     def omit(self):
         return self.request.query_params.get("omit", "").split(",")
 
     def get_serializer(self, *args, **kwargs):
         serializer_class = self.get_serializer_class()
         kwargs.setdefault('context', self.get_serializer_context())
-        if issubclass(serializer_class, DynamicReadSerializerMixin):
+        if issubclass(serializer_class, DynamicReadSerializerMixin) and self.request.method == "GET":
             return serializer_class(
                 *args,
                 dynamic_filter_fields=self.fields,
                 dynamic_omit_fields=self.omit,
+                optimize_queryset=self.optimize_queryset,
                 **kwargs
             )
         return serializer_class(*args, **kwargs)
-
-
-class DynamicReadORMViewMixin(DynamicReadBaseViewMixin):
-    def get_queryset(self):
-        queryset = super(DynamicReadORMViewMixin, self).get_queryset()
-        if (
-            self.request.method == "GET"
-            and issubclass(self.serializer_class, DynamicReadSerializerMixin)
-        ):
-            fields, omit = tuple(self.fields), tuple(self.omit)
-
-            if not fields[0]:
-                fields = ()
-            if not omit[0]:
-                omit = ()
-
-            select, prefetch = get_prefetch_select(
-                self.get_serializer().__class__, fields, omit,
-            )
-
-            if select:
-                queryset = queryset.select_related(*select)
-            if prefetch:
-                queryset = queryset.prefetch_related(*prefetch)
-
-        return queryset

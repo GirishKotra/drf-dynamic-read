@@ -58,6 +58,7 @@ coverage.xml
 # Django stuff:
 *.log
 local_settings.py
+*.db
 db.sqlite3
 db.sqlite3-journal
 
@@ -130,3 +131,4 @@ dmypy.json
 
 # Pycharm project config
 .idea/
+
