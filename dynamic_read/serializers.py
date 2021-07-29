@@ -1,14 +1,18 @@
-from functools import cached_property
+from django.utils.functional import cached_property
 from rest_framework.relations import PrimaryKeyRelatedField
 from rest_framework.serializers import ListSerializer
 from rest_framework.utils.serializer_helpers import BindingDict
 
-from .utils import get_prefetch_select, process_filter_fields, get_relational_fields
+from .utils import get_prefetch_select, process_field_options, get_relational_fields
 from .exceptions import ChildNotSupported
 
 
 def sub_class_hook(cls):
-    if hasattr(cls, "Meta") and hasattr(cls.Meta, "model") and not cls.Meta.model._meta.abstract:
+    if (
+        hasattr(cls, "Meta")
+        and hasattr(cls.Meta, "model")
+        and not cls.Meta.model._meta.abstract
+    ):
         cls._all_select_prefetch = cls.get_all_select_prefetch()
     else:
         cls.__init_subclass__ = classmethod(sub_class_hook)
@@ -19,10 +23,16 @@ class DynamicReadSerializerMixin(object):
     A serializer mixin that takes some additional arguments that controls
     which fields should be displayed, and respective queryset optimizations.
     """
+
     __init_subclass__ = classmethod(sub_class_hook)
 
     def __init__(
-        self, *args, filter_fields=tuple(), omit_fields=tuple(), optimize_queryset=False, **kwargs,
+        self,
+        *args,
+        filter_fields=None,
+        omit_fields=None,
+        optimize_queryset=False,
+        **kwargs,
     ):
         """
         Overrides the original __init__ to support disabling dynamic flex fields.
@@ -39,16 +49,22 @@ class DynamicReadSerializerMixin(object):
             filter_fields and omit_fields,
         ), "Pass either filter_fields or omit_fields, not both"
 
-        self._raw_filter_fields, self._raw_omit_fields = filter_fields, omit_fields
+        # type casting to tuple
+        filter_fields, omit_fields = (
+            tuple() if not filter_fields else tuple(filter_fields),
+            tuple() if not omit_fields else tuple(omit_fields),
+        )
 
         self.dr_meta = (
-            process_filter_fields(filter_fields, omit_fields)
+            process_field_options(filter_fields, omit_fields)
             if filter_fields or omit_fields
             else None
         )
         if optimize_queryset:
             queryset = args[0]
-            select, prefetch = get_prefetch_select(self.__class__, filter_fields, omit_fields)
+            select, prefetch = get_prefetch_select(
+                self.__class__, filter_fields, omit_fields
+            )
             if select:
                 queryset = queryset.select_related(*select)
             if prefetch:
@@ -58,18 +74,18 @@ class DynamicReadSerializerMixin(object):
         super(DynamicReadSerializerMixin, self).__init__(*args, **kwargs)
 
     def extract_serializer_from_child(self, child):
-        """Child object can be a ListSerializer, PresentablePrimaryKeyRelatedField, etc. Use this to define serializer
-        object extraction from child object. This method must return a DynamicReadSerializerMixin object. Or exit raising
-        ChildNotSupported exception."""
+        """Child object can be a ListSerializer, PresentablePrimaryKeyRelatedField, etc. This method is responsible to
+        return a DynamicReadSerializerMixin object(desired child), Override this to handle additional types of child and
+        perform a super call if you want the ListSerializer child type to be handled if input child type is not known
+        exit raising ChildNotSupported exception."""
         if isinstance(child, DynamicReadSerializerMixin):
             return child
 
         if isinstance(child, ListSerializer) and isinstance(
-            child.child, DynamicReadSerializerMixin
+            child.child, DynamicReadSerializerMixin,
         ):
             return child.child
 
-        # Apply any additional child extraction logic here
         raise ChildNotSupported(child)
 
     def derive_desired_fields(self, field_names, fields_map) -> set:
@@ -86,11 +102,8 @@ class DynamicReadSerializerMixin(object):
         # attach dr_meta to necessary children
         for field, field_meta in self.dr_meta["nested"].items():
             try:
-                nested_field = fields_map[field]
-                if isinstance(nested_field, ListSerializer):
-                    nested_field.child.dr_meta = field_meta
-                else:
-                    nested_field.dr_meta = field_meta
+                nested_field = self.extract_serializer_from_child(fields_map[field])
+                nested_field.dr_meta = field_meta
             except KeyError:
                 continue
 
@@ -98,7 +111,7 @@ class DynamicReadSerializerMixin(object):
         for field in self.dr_meta["id_fields"]:
             real_field = field.split("_id")[0]
             try:
-                # if a field with exact match is already defined
+                # if a write_only PrimaryKeyRelatedField is defined
                 if field in fields_map and isinstance(
                     fields_map[field], PrimaryKeyRelatedField,
                 ):
@@ -139,9 +152,7 @@ class DynamicReadSerializerMixin(object):
     def evaluate_select_prefetch(self, accessor_prefix=""):
         final_select = []
         final_prefetch = []
-        serializer_obj = (
-            self.child if isinstance(self, ListSerializer) else self
-        )
+        serializer_obj = self.child if isinstance(self, ListSerializer) else self
         relational_fields = get_relational_fields(serializer_obj.__class__)
         for field_name, field_obj in serializer_obj.fields.items():
             field_name = (field_obj.source or field_name).split(".")[0]
@@ -150,8 +161,12 @@ class DynamicReadSerializerMixin(object):
             is_many = isinstance(field_obj, ListSerializer)
             field_obj = field_obj.child if is_many else field_obj
             if isinstance(field_obj, DynamicReadSerializerMixin):
-                sub_select_related, sub_prefetch_related = field_obj.evaluate_select_prefetch(
-                    accessor_prefix=f"{accessor_prefix}{field_name}__")
+                (
+                    sub_select_related,
+                    sub_prefetch_related,
+                ) = field_obj.evaluate_select_prefetch(
+                    accessor_prefix=f"{accessor_prefix}{field_name}__",
+                )
                 if sub_select_related:
                     if not is_many:
                         final_select.extend(sub_select_related)

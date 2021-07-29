@@ -3,29 +3,33 @@ from functools import lru_cache
 
 
 @lru_cache(maxsize=2048)
-def get_prefetch_select(serializer_class, filter_fields=(), omit_fields=()):
+def get_prefetch_select(serializer_class, filter_fields: tuple, omit_fields: tuple):
     final_select, final_prefetch = [], []
-    all_select, all_prefetch = serializer_class.get_all_select_prefetch()  # fetch from cache
+    (
+        all_select,
+        all_prefetch,
+    ) = serializer_class.get_all_select_prefetch()  # fetch from cache
     if not (filter_fields or omit_fields):
         return all_select, all_prefetch
 
-    for field in filter_fields:
-        final_select.extend(
-            (
-                each
-                for each in all_select
-                if each.startswith(field) or field.startswith(each)
+    if filter_fields:
+        for field in filter_fields:
+            final_select.extend(
+                (
+                    each
+                    for each in all_select
+                    if each.startswith(field) or field.startswith(each)
+                )
             )
-        )
-        final_prefetch.extend(
-            (
-                each
-                for each in all_prefetch
-                if each.startswith(field) or field.startswith(each)
+            final_prefetch.extend(
+                (
+                    each
+                    for each in all_prefetch
+                    if each.startswith(field) or field.startswith(each)
+                )
             )
-        )
 
-    if omit_fields:
+    else:
         if not final_select:
             final_select = all_select
         if not final_prefetch:
@@ -57,11 +61,13 @@ def get_prefetch_select(serializer_class, filter_fields=(), omit_fields=()):
 
 
 def dynamic_read_meta():
-    return dict(fields=set(), exclude=set(), id_fields=set(), nested=defaultdict(dynamic_read_meta))
+    return dict(
+        fields=set(), omit=set(), id_fields=set(), nested=defaultdict(dynamic_read_meta)
+    )
 
 
-@lru_cache(maxsize=2048)
-def process_filter_fields(filter_fields=tuple(), omit_fields=tuple()) -> dict:
+@lru_cache()
+def process_field_options(filter_fields: tuple, omit_fields: tuple) -> dict:
     filter_fields, omit_fields, dr_meta = (
         (each.split("__") for each in filter_fields),
         (each.split("__") for each in omit_fields),
