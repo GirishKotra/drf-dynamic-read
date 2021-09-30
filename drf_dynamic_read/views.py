@@ -1,3 +1,5 @@
+from django.db.models import QuerySet
+
 from .serializers import DynamicReadSerializerMixin
 
 
@@ -21,11 +23,19 @@ class DynamicReadViewMixin(object):
             issubclass(serializer_class, DynamicReadSerializerMixin)
             and self.request.method == "GET"
         ):
+            if self.optimize_queryset:
+                serializer_feed = args[0]
+                if isinstance(serializer_feed, QuerySet):
+                    args = list(args)
+                    args[0] = serializer_class.optimize_queryset(
+                        filter_fields=self.fields,
+                        omit_fields=self.omit,
+                        queryset=serializer_feed
+                    )
             return serializer_class(
                 *args,
                 filter_fields=self.fields,
                 omit_fields=self.omit,
-                optimize_queryset=self.optimize_queryset,
                 **kwargs,
             )
         return serializer_class(*args, **kwargs)

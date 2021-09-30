@@ -1,3 +1,5 @@
+import logging
+
 from django.utils.functional import cached_property
 from rest_framework.relations import PrimaryKeyRelatedField
 from rest_framework.serializers import ListSerializer
@@ -5,6 +7,9 @@ from rest_framework.utils.serializer_helpers import BindingDict
 
 from .utils import get_prefetch_select, process_field_options, get_relational_fields
 from .exceptions import ChildNotSupported
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 
 
 def sub_class_hook(cls):
@@ -31,7 +36,6 @@ class DynamicReadSerializerMixin(object):
         *args,
         filter_fields=None,
         omit_fields=None,
-        optimize_queryset=False,
         **kwargs,
     ):
         """
@@ -41,8 +45,6 @@ class DynamicReadSerializerMixin(object):
         :param kwargs:
         :param filter_fields: This represents list of fields that should be allowed for serialization
         :param omit_fields: This represents list of fields that shouldn't be allowed for serialization
-        :param optimize_queryset: boolean to enable/disable queryset optimizations
-
         """
 
         assert not bool(
@@ -60,18 +62,19 @@ class DynamicReadSerializerMixin(object):
             if filter_fields or omit_fields
             else None
         )
-        if optimize_queryset:
-            queryset = args[0]
-            select, prefetch = get_prefetch_select(
-                self.__class__, filter_fields, omit_fields
-            )
-            if select:
-                queryset = queryset.select_related(*select)
-            if prefetch:
-                queryset = queryset.prefetch_related(*prefetch)
-            args = (queryset, *args[1:])
 
         super(DynamicReadSerializerMixin, self).__init__(*args, **kwargs)
+
+    @classmethod
+    def optimize_queryset(cls, filter_fields, omit_fields, queryset):
+        select, prefetch = get_prefetch_select(
+            cls, filter_fields, omit_fields
+        )
+        if select:
+            queryset = queryset.select_related(*select)
+        if prefetch:
+            queryset = queryset.prefetch_related(*prefetch)
+        return queryset
 
     def extract_serializer_from_child(self, child):
         """Child object can be a ListSerializer, PresentablePrimaryKeyRelatedField, etc. This method is responsible to
@@ -105,6 +108,9 @@ class DynamicReadSerializerMixin(object):
                 nested_field = self.extract_serializer_from_child(fields_map[field])
                 nested_field.dr_meta = field_meta
             except KeyError:
+                continue
+            except ChildNotSupported as e:
+                logger.exception(e)
                 continue
 
         # (optional) process id_fields and update the fields_map respectively

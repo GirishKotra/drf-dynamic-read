@@ -38,12 +38,17 @@ This package provides following mixins:
 
             - ``filter_fields`` : list of serializer field names which should be allowed for serialization
             - ``omit_fields`` : list of serializer field names which should not be allowed for serialization
-            - ``optimize_queryset`` : enable/disable queryset optimizations by performing necessary select_related and prefetch_related(based on ``fields`` and ``omit`` query params per request) on the input queryset
+    - ``DynamicReadSerializerMixin.optimize_queryset`` : a utility to return a optimized queryset by performing necessary select_related and prefetch_related based on ``fields`` and ``omit``, below are the arguments to be passed
+
+            - ``filter_fields`` : list of serializer field names which should be allowed for serialization
+            - ``omit_fields`` : list of serializer field names which should not be allowed for serialization
+            - ``queryset`` : input queryset object
+
 
 - ``DynamicReadViewMixin``
 
     - provides support on top of `rest_framework.viewsets.ModelViewSet` to pick required fields to be serialized via query params of a GET request, these required fields are internally forwarded to ``DynamicReadSerializerMixin``
-    - ``optimize_queryset`` : static boolean attribute whose value is forwarded to DynamicReadSerializerMixin kwargs
+    - ``optimize_queryset`` : static boolean attribute which decides whether to perform queryset optimization steps via ``DynamicReadSerializerMixin.optimize_queryset``
     - following query params can be passed for any GET request which is served by a model viewset inheriting this mixin:
 
         - ``fields`` : serializer field names as comma seperated values which should be considered for serialization
@@ -149,7 +154,7 @@ Example views for above ER:
 
 
     router = DefaultRouter()
-    router.register("/api/event_basic/")
+    router.register("/api/event_basic/", EventModelViewSet)
 
 
 A regular request returns all fields:
@@ -324,8 +329,8 @@ Now let's define a new view in views.py:
         serializer_class = EventSerializer
 
     router = DefaultRouter()
-    router.register("/api/event_basic/")
-    router.register("/api/event_enhanced/")
+    router.register("/api/event_basic/", EventModelViewSet)
+    router.register("/api/event_enhanced/", EventOptimizedModelViewSet)
 
 Now let's try the optimized version: ``GET /api/event_enhanced/``
 

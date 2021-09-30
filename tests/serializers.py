@@ -3,7 +3,7 @@ For the tests.
 """
 from rest_framework import serializers
 from .models import Teacher, School
-from dynamic_read.serializers import DynamicReadSerializerMixin
+from drf_dynamic_read.serializers import DynamicReadSerializerMixin
 
 
 class SchoolSerializer(DynamicReadSerializerMixin, serializers.ModelSerializer):
