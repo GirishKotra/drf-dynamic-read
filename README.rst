@@ -362,7 +362,7 @@ Yet to write :)
 
 
 Planned features
--------
+----------------
 
 - API aliasing, single view serving extended url patterns, each url pattern is an alias mapped to specific fields,omit values
 - Restricting the scope of fields,omit w.r.t user defined permissions per API

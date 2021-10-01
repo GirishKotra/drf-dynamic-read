@@ -1,6 +1,7 @@
 from setuptools import setup
 
-readme = open('README.rst').read()
+with open("README.rst", encoding='utf-8') as fh:
+    long_description = fh.read()
 
 setup(
     name='drf_dynamic_read',
@@ -14,7 +15,9 @@ setup(
     include_package_data=True,
     license='MIT',
     keywords='drf restframework rest_framework django_rest_framework serializers',
-    long_description=readme,
+    long_description=long_description,
+    long_description_content_type="text/x-rst",
+    python_requires=">=3.6",
     classifiers=[
         'Development Status :: 3 - Alpha',
         'License :: OSI Approved :: MIT License',
