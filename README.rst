@@ -58,7 +58,7 @@ This package provides following mixins:
 Installing
 ----------
 
-    yet to be registered on pypi, copy source files until then, :D
+    pip install drf-dynamic-read
 
 
 Usage
