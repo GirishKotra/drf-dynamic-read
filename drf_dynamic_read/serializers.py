@@ -118,19 +118,18 @@ class DynamicReadSerializerMixin(object):
             real_field = field.split("_id")[0]
             try:
                 # if a write_only PrimaryKeyRelatedField is defined
-                if field in fields_map and isinstance(
+                if isinstance(
                     fields_map[field], PrimaryKeyRelatedField,
                 ):
                     fields_map[field].write_only = False
-                    desired_field_names.add(field)
-
                 # if not defined, then reroute to default fk serializer field
                 elif real_field in fields_map and isinstance(
                     fields_map[real_field], PrimaryKeyRelatedField,
                 ):
                     fields_map[field] = fields_map[real_field]
                     fields_map[field].write_only = False
-                    desired_field_names.add(field)
+
+                desired_field_names.add(field)
             except KeyError:
                 continue
         return desired_field_names

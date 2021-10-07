@@ -5,7 +5,7 @@ with open("README.rst", encoding='utf-8') as fh:
 
 setup(
     name='drf_dynamic_read',
-    version='0.0.1a',
+    version='0.0.2a',
     description='A utility to improve and optimise read operations(querying and serialization of data) for Django Rest Framework based applications',
     author='Girish Kotra',
     author_email='girish934@gmail.com',
