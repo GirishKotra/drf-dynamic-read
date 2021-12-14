@@ -172,17 +172,17 @@ class DynamicReadSerializerMixin(object):
                 ) = field_obj.evaluate_select_prefetch(
                     accessor_prefix=f"{accessor_prefix}{field_name}__",
                 )
+                if is_many:
+                    final_prefetch.append(f"{accessor_prefix}{field_name}")
+                else:
+                    final_select.append(f"{accessor_prefix}{field_name}")
                 if sub_select_related:
                     if not is_many:
                         final_select.extend(sub_select_related)
                     else:
                         final_prefetch.extend(sub_select_related)
-                elif not is_many:
-                    final_select.append(f"{accessor_prefix}{field_name}")
                 if sub_prefetch_related:
                     final_prefetch.extend(sub_prefetch_related)
-                elif is_many:
-                    final_prefetch.append(f"{accessor_prefix}{field_name}")
         return final_select, final_prefetch
 
     @classmethod

@@ -5,7 +5,7 @@ with open("README.rst", encoding='utf-8') as fh:
 
 setup(
     name='drf_dynamic_read',
-    version='0.0.2a',
+    version='0.1.0',
     description='A utility to improve and optimise read operations(querying and serialization of data) for Django Rest Framework based applications',
     author='Girish Kotra',
     author_email='girish934@gmail.com',
@@ -18,6 +18,10 @@ setup(
     long_description=long_description,
     long_description_content_type="text/x-rst",
     python_requires=">=3.6",
+    install_requires=[
+        "Django>=1.11.16",
+        "djangorestframework>=3.6.4"
+    ],
     classifiers=[
         'Development Status :: 3 - Alpha',
         'License :: OSI Approved :: MIT License',
