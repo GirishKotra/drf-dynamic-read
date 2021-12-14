@@ -1,5 +1,3 @@
-from django.db.models import QuerySet
-
 from .serializers import DynamicReadSerializerMixin
 
 
@@ -9,12 +7,27 @@ class DynamicReadViewMixin(object):
     @property
     def fields(self):
         unparsed = self.request.query_params.get("fields", "")
-        return unparsed.split(",") if unparsed else None
+        return tuple(unparsed.split(",")) if unparsed else tuple()
 
     @property
     def omit(self):
         unparsed = self.request.query_params.get("omit", "")
-        return unparsed.split(",") if unparsed else None
+        return tuple(unparsed.split(",")) if unparsed else tuple()
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        serializer_class = self.get_serializer_class()
+        if (
+            self.optimize_queryset
+            and issubclass(serializer_class, DynamicReadSerializerMixin)
+            and self.request.method == "GET"
+        ):
+            return serializer_class.optimize_queryset(
+                filter_fields=self.fields,
+                omit_fields=self.omit,
+                queryset=queryset
+            )
+        return queryset
 
     def get_serializer(self, *args, **kwargs):
         serializer_class = self.get_serializer_class()
@@ -23,15 +36,6 @@ class DynamicReadViewMixin(object):
             issubclass(serializer_class, DynamicReadSerializerMixin)
             and self.request.method == "GET"
         ):
-            if self.optimize_queryset:
-                serializer_feed = args[0]
-                if isinstance(serializer_feed, QuerySet):
-                    args = list(args)
-                    args[0] = serializer_class.optimize_queryset(
-                        filter_fields=self.fields,
-                        omit_fields=self.omit,
-                        queryset=serializer_feed
-                    )
             return serializer_class(
                 *args,
                 filter_fields=self.fields,
