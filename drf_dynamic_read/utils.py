@@ -4,7 +4,6 @@ from functools import lru_cache
 
 @lru_cache(maxsize=2048)
 def get_prefetch_select(serializer_class, filter_fields: tuple, omit_fields: tuple):
-    final_select, final_prefetch = [], []
     (
         all_select,
         all_prefetch,
@@ -13,34 +12,33 @@ def get_prefetch_select(serializer_class, filter_fields: tuple, omit_fields: tup
         return all_select, all_prefetch
 
     if filter_fields:
+        final_select, final_prefetch = set(), set()
         for field in filter_fields:
-            final_select.extend(
-                (
+            final_select |= (
+                {
                     each
                     for each in all_select
                     if each.startswith(field) or field.startswith(each)
-                )
+                }
             )
-            final_prefetch.extend(
-                (
+            final_prefetch |= (
+                {
                     each
                     for each in all_prefetch
                     if each.startswith(field) or field.startswith(each)
-                )
+                }
             )
+        final_select, final_prefetch = list(final_select), list(final_prefetch)
 
     else:
-        if not final_select:
-            final_select = all_select
-        if not final_prefetch:
-            final_prefetch = all_prefetch
+        final_select, final_prefetch = all_select, all_prefetch
 
         final_select = [
             each
             for each in final_select
             if not any(
                 (
-                    (each.startswith(field) or field.startswith(each))
+                    each.startswith(field)
                     for field in omit_fields
                 )
             )
@@ -51,7 +49,7 @@ def get_prefetch_select(serializer_class, filter_fields: tuple, omit_fields: tup
             for each in final_prefetch
             if not any(
                 (
-                    (each.startswith(field) or field.startswith(each))
+                    each.startswith(field)
                     for field in omit_fields
                 )
             )
