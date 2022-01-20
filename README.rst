@@ -296,6 +296,7 @@ All the above examples work in the same mechanism for detail routes
 
 Query Optimization
 ------------------
+Let us assume that there are 10 rows in the Event model
 
 Now first let's consider this general request which returns all the fields:
 ``GET /api/event_basic/``
